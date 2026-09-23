@@ -125,7 +125,8 @@ class OfflineBotTests(unittest.TestCase):
         self.assertEqual(len(reports), 5)
         for question, report in zip(questions, reports):
             self.assertIsInstance(report, ForecastReport, msg=f"{type(question).__name__}: {report}")
-            self.assertTrue(report.explanation.startswith("#"))
+            # forecasting-tools prefixes the markdown report with a newline.
+            self.assertTrue(report.explanation.lstrip().startswith("#"))
             self.assertGreater(report.price_estimate or 0, 0)
         binary, mc, numeric, discrete, date = (r.prediction for r in reports)
         self.assertTrue(0.02 <= binary <= 0.98)
