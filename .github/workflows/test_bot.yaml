@@ -1,0 +1,58 @@
+name: Test bot (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "test = a few bot-testing-area questions; budget; models; coverage"
+        type: choice
+        options: [test, budget, models, coverage]
+        default: test
+      publish:
+        description: "Publish to the bot-testing-area (test mode only; does not count for prizes)"
+        type: boolean
+        default: true
+      max_questions:
+        description: "Questions to forecast in test mode"
+        default: "4"
+
+concurrency:
+  group: forecasting
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Offline tests
+        run: python -m pytest -q
+      - name: Run
+        env:
+          MODE: ${{ inputs.mode }}
+          PUBLISH: ${{ inputs.publish }}
+          MAX_QUESTIONS: ${{ inputs.max_questions }}
+          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ASKNEWS_CLIENT_ID: ${{ secrets.ASKNEWS_CLIENT_ID }}
+          ASKNEWS_SECRET: ${{ secrets.ASKNEWS_SECRET }}
+          ASKNEWS_API_KEY: ${{ secrets.ASKNEWS_API_KEY }}
+        run: |
+          case "$MAX_QUESTIONS" in ''|*[!0-9]*) MAX_QUESTIONS=4 ;; esac
+          ARGS="--mode $MODE"
+          if [ "$MODE" = "test" ]; then
+            ARGS="$ARGS --max-questions $MAX_QUESTIONS"
+            if [ "$PUBLISH" != "true" ]; then ARGS="$ARGS --dry-run"; fi
+          fi
+          python main.py $ARGS

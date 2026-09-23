@@ -1,0 +1,56 @@
+name: Forecast (FutureEval + MiniBench)
+
+on:
+  workflow_dispatch: # also used by an optional external scheduler
+  schedule:
+    # Questions stay open 1.5 h. Every 10 min, away from the busy top of the
+    # hour: GitHub drops many scheduled runs, so we schedule generously.
+    - cron: "4,14,24,34,44,54 * * * *"
+
+concurrency:
+  group: forecasting # shared with the manual test workflow: never two runs at once
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Restore bot state
+        uses: actions/cache/restore@v4
+        with:
+          path: .bot_state
+          key: bot-state-${{ github.run_id }}
+          restore-keys: bot-state-
+      - name: Forecast
+        run: |
+          case "$MODE" in tournament|seasonal|minibench) ;; *) MODE=tournament ;; esac
+          mkdir -p .bot_state
+          python main.py --mode "$MODE"
+        env:
+          MODE: ${{ vars.FORECAST_MODE || 'tournament' }}
+          METACULUS_TOKEN: ${{ secrets.METACULUS_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ASKNEWS_CLIENT_ID: ${{ secrets.ASKNEWS_CLIENT_ID }}
+          ASKNEWS_SECRET: ${{ secrets.ASKNEWS_SECRET }}
+          ASKNEWS_API_KEY: ${{ secrets.ASKNEWS_API_KEY }}
+          BOT_PROFILE: ${{ vars.BOT_PROFILE }}
+          MINIBENCH_PROFILE: ${{ vars.MINIBENCH_PROFILE }}
+          MAX_COST_PER_RUN_USD: ${{ vars.MAX_COST_PER_RUN_USD }}
+      - name: Save bot state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .bot_state
+          key: bot-state-${{ github.run_id }}
